@@ -1,6 +1,7 @@
 import os
 import json
 import asyncio
+import time
 from dotenv import load_dotenv
 from crawl4ai import BFSDeepCrawlStrategy, BrowserConfig, CrawlerRunConfig
 from crawl4ai import JsonCssExtractionStrategy
@@ -14,6 +15,7 @@ load_dotenv()
 local = os.getenv("LOCAL", "")
 db_path = os.getenv("DB_PATH", "")
 initial_url = os.getenv("BLOG_URL", "")
+scrape_interval = os.getenv("SCRAPE_INTERVAL", "1800")
 
 if not local or not db_path or not initial_url:
     raise ValueError("Please set required environment variables.")
@@ -96,4 +98,8 @@ async def extract_blog_posts():
         else:
             print("No content extracted")
 
-asyncio.run(extract_blog_posts())
+while True:
+    print("Starting blog scraper...")
+    asyncio.run(extract_blog_posts())
+    print(f"Blog scraper completed. Sleeping for {scrape_interval} seconds...")
+    time.sleep(int(scrape_interval))

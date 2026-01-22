@@ -1,6 +1,7 @@
 import json
 import asyncio
 import os
+import time
 from dotenv import load_dotenv
 from crawl4ai import BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai import JsonCssExtractionStrategy
@@ -14,6 +15,7 @@ local = os.getenv("LOCAL", "")
 db_path = os.getenv("DB_PATH", "")
 state_directory = os.getenv("STATE_DIRECTORY", "")
 initial_url = os.getenv("LINKEDIN_URL", "")
+scrape_interval = os.getenv("SCRAPE_INTERVAL", "3600")
 
 if not local or not initial_url or not db_path or not state_directory:
     raise ValueError("Please set required environment variables.")
@@ -119,5 +121,9 @@ async def extract_linkedin_jobs():
                     all_data = db.get_all_data()
                     print(f"Saved {inserted_count} items to database at {db_path}")
                     print(f"Total items in database: {len(all_data)}")
-      
-asyncio.run(extract_linkedin_jobs())
+
+while True:
+    print("Starting LinkedIn scraper...")
+    asyncio.run(extract_linkedin_jobs())
+    print(f"LinkedIn scraper completed. Sleeping for {scrape_interval} seconds...")
+    time.sleep(int(scrape_interval))

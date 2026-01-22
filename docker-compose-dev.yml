@@ -24,13 +24,7 @@ services:
       - STATE_DIRECTORY=/app/state
       - LOCAL=false
       - SCRAPE_INTERVAL=3600  # Run every 60 minutes (in seconds)
-    command: >
-      sh -c "while true; do
-        echo 'Starting LinkedIn scraper...';
-        python crawlers/linkedin.py;
-        echo 'LinkedIn scraper completed. Sleeping for $$SCRAPE_INTERVAL seconds...';
-        sleep $SCRAPE_INTERVAL;
-      done"
+    command: python crawlers/linkedin.py
     restart: unless-stopped
     depends_on:
       - api
@@ -46,13 +40,7 @@ services:
       - BLOG_URL=https://blog.francescomeli.com
       - LOCAL=false
       - SCRAPE_INTERVAL=1800  # Run every 30 minutes (in seconds)
-    command: >
-      sh -c "while true; do
-        echo 'Starting blog scraper...';
-        python crawlers/blog.py;
-        echo 'Blog scraper completed. Sleeping for $$SCRAPE_INTERVAL seconds...';
-        sleep $SCRAPE_INTERVAL;
-      done"
+    command: python crawlers/blog.py
     restart: unless-stopped
     depends_on:
       - api
