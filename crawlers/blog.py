@@ -15,8 +15,6 @@ local = os.getenv("LOCAL", "")
 db_path = os.getenv("DB_PATH", "")
 initial_url = os.getenv("BLOG_URL", "")
 
-print(f"LOCAL: {local}, DB_PATH: {db_path}, BLOG_URL: {initial_url}")
-
 if not local or not db_path or not initial_url:
     raise ValueError("Please set required environment variables.")
 

@@ -1,18 +1,26 @@
 from fastapi import FastAPI, HTTPException
 import sqlite3
+import os
+from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
-app = FastAPI(title="Scrapers API", version="1.0.0")
+# Load environment variables
+load_dotenv()
 
-DB_PATH = "/Users/francescomeli/Projects/scrapers/data/scrapers.db"
+db_path = os.getenv("DB_PATH", "")
+
+if not db_path:
+    raise ValueError("Please set DB_PATH environment variable.")
+
+app = FastAPI(title="Scrapers API", version="1.0.0")
 
 
 def get_db_connection():
     """Create a database connection"""
-    if not Path(DB_PATH).exists():
+    if not Path(db_path).exists():
         raise HTTPException(status_code=404, detail="Database not found")
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(db_path)
 
 
 def get_table_data(table_name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -117,4 +125,4 @@ def get_table_item(table_name: str, item_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

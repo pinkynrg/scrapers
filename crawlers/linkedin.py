@@ -13,9 +13,6 @@ load_dotenv()
 local = os.getenv("LOCAL", "")
 db_path = os.getenv("DB_PATH", "")
 state_directory = os.getenv("STATE_DIRECTORY", "")
-
-print(f"LOCAL: {local}, STATE_DIRECTORY: {state_directory}, DB_PATH: {db_path}")
-
 initial_url = os.getenv("LINKEDIN_URL", "")
 
 if not local or not initial_url or not db_path or not state_directory:

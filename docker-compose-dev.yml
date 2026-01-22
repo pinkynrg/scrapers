@@ -1,22 +1,23 @@
 services:
   api:
-    image: pinkynrg/scrapers
+    build: .
     container_name: scrapers-api
     ports:
-      - "8008:8000"
+      - "8000:8000"
     volumes:
-      - /mnt/data/scrapers/data:/app/data
+      - ./data:/app/data
+      - ./state:/app/state
     environment:
       - DB_PATH=/app/data/scrapers.db
     command: python api.py
-    restart: always
+    restart: unless-stopped
 
   linkedin-scraper:
-    image: pinkynrg/scrapers
+    build: .
     container_name: linkedin-scraper
     volumes:
-      - /mnt/data/scrapers/data:/app/data
-      - /mnt/data/scrapers/state:/app/state
+      - ./data:/app/data
+      - ./state:/app/state
     environment:
       - DB_PATH=/app/data/scrapers.db
       - LINKEDIN_URL=https://www.linkedin.com/jobs/search/?currentJobId=4345767493&f_E=4&f_WT=2&keywords=python%20react%20docker&origin=JOB_SEARCH_PAGE_JOB_FILTER
@@ -30,14 +31,16 @@ services:
         echo 'LinkedIn scraper completed. Sleeping for $$SCRAPE_INTERVAL seconds...';
         sleep $SCRAPE_INTERVAL;
       done"
-    restart: always
+    restart: unless-stopped
+    depends_on:
+      - api
 
   blog-scraper:
-    image: pinkynrg/scrapers
+    build: .
     container_name: blog-scraper
     volumes:
-      - /mnt/data/scrapers/data:/app/data
-      - /mnt/data/scrapers/state:/app/state
+      - ./data:/app/data
+      - ./state:/app/state
     environment:
       - DB_PATH=/app/data/scrapers.db
       - BLOG_URL=https://blog.francescomeli.com
@@ -50,4 +53,10 @@ services:
         echo 'Blog scraper completed. Sleeping for $$SCRAPE_INTERVAL seconds...';
         sleep $SCRAPE_INTERVAL;
       done"
-    restart: always
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  data:
+  state:
