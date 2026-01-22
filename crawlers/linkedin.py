@@ -1,5 +1,6 @@
 import json
 import asyncio
+import re
 from crawl4ai import BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai import JsonCssExtractionStrategy
 from helpers.crawler_wrapper import CrawlerWrapper
@@ -14,6 +15,12 @@ async def extract_linkedin_jobs():
         "name": "linkedin jobs",
         "baseSelector": "body",
         "fields": [
+            {
+                "name": "id",
+                "selector": ".jobs-search-results-list__list-item--active",
+                "type": "attribute",
+                "attribute": "data-job-id"
+            },
             {
                 "name": "title",
                 "selector": ".job-details-jobs-unified-top-card__job-title",
