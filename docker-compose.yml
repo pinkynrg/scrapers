@@ -1,6 +1,6 @@
 services:
   api:
-    image: pinkynrg/scrapers
+    image: pinkynrg/scrapers:latest
     container_name: scrapers-api
     ports:
       - "8008:8000"
@@ -12,7 +12,7 @@ services:
     restart: always
 
   linkedin-scraper:
-    image: pinkynrg/scrapers
+    image: pinkynrg/scrapers:latest
     container_name: linkedin-scraper
     volumes:
       - /mnt/data/scrapers/data:/app/data
@@ -33,7 +33,7 @@ services:
     restart: always
 
   blog-scraper:
-    image: pinkynrg/scrapers
+    image: pinkynrg/scrapers:latest
     container_name: blog-scraper
     volumes:
       - /mnt/data/scrapers/data:/app/data
