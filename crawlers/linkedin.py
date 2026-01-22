@@ -1,18 +1,29 @@
 import json
 import asyncio
-import re
+import os
+from dotenv import load_dotenv
 from crawl4ai import BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai import JsonCssExtractionStrategy
 from helpers.crawler_wrapper import CrawlerWrapper
+from helpers.db_helper import DatabaseHelper
 
-local = True
-initial_url = "https://www.linkedin.com/jobs/search/?keywords=python%20developer&location=Italy"
-session_id = "linkedin-jobs-session"
-final_data = []
+# Load environment variables
+load_dotenv()
+
+local = os.getenv("LOCAL", "")
+db_path = os.getenv("DB_PATH", "")
+state_directory = os.getenv("STATE_DIRECTORY", "")
+
+print(f"LOCAL: {local}, STATE_DIRECTORY: {state_directory}, DB_PATH: {db_path}")
+
+initial_url = os.getenv("LINKEDIN_URL", "")
+
+if not local or not initial_url or not db_path or not state_directory:
+    raise ValueError("Please set required environment variables.")
 
 async def extract_linkedin_jobs():
     schema = {
-        "name": "linkedin jobs",
+        "name": "linkedin_jobs",
         "baseSelector": "body",
         "fields": [
             {
@@ -44,51 +55,59 @@ async def extract_linkedin_jobs():
     js_click_next_job = """
       // Find the currently active job card
       const currentJob = document.querySelector('.jobs-search-results-list__list-item--active');
+      const list = document.querySelector('.scaffold-layout__list header + div');
       
       // Find the next sibling job card
       if (currentJob) {
+        console.log("currentJob found");
         const nextJob = currentJob.parentElement.parentElement.nextElementSibling;
 
         // if next job in the list exists, click it
         if (nextJob) {
+          console.log("nextJob found");
           nextJob.firstElementChild.firstElementChild.click()
           list.scrollTop = nextJob.offsetTop;
         } else {
-          // otherwise, change page
+          console.log("nextJob not found, changing page");
           const el = document.querySelector('.jobs-search-pagination__button--next');
           el.click();
         }
+      } else {
+        console.log("No currentJob found");
       }
     """
 
-    with open("/Users/francescomeli/Projects/scrapers/state/linkedin-pinkynrg.json", "r") as f:
+    state_file = os.path.join(state_directory, "linkedin-pinkynrg.json")
+    
+    with open(state_file, "r") as f:
         storage_state_dict = json.load(f)
     
     browser_config = BrowserConfig(
-        headless=not local,
+        headless=(local != "true"),
         viewport_width=1920,
+        viewport_height=1080,
         storage_state=storage_state_dict,
     )
 
     # Initialize the crawler wrapper once
     crawler_wrapper = CrawlerWrapper(
         browser_config=browser_config,
-        local=local,
+        local=local == "true",
     )
-    
-    for index in range(3):
+
+    for index in range(1000):
         
         crawler_config = CrawlerRunConfig(
             js_only=True if index > 0 else False,
             extraction_strategy=extraction_strategy,
             cache_mode=CacheMode.BYPASS,
             js_code=js_click_next_job if index > 0 else "",
-            session_id=session_id,
-            delay_before_return_html=4,
+            session_id="linkedin-jobs-session",
+            wait_for="js:() => !document.querySelector('.artdeco-loader__bars')",
+            delay_before_return_html=1,
         )
 
         results = await crawler_wrapper.crawl(initial_url, crawler_config)
-        
 
         for result in results:
             if not result.success:
@@ -97,11 +116,11 @@ async def extract_linkedin_jobs():
             
             if result.extracted_content:
                 data = json.loads(result.extracted_content)
-                final_data.extend(data)
-                print(data)
-            else:
-                print("No content extracted")
-    
-    print(final_data)
+                with DatabaseHelper(db_path, schema) as db:
+                    db.create_table_from_schema()
+                    inserted_count = db.save_data(data)
+                    all_data = db.get_all_data()
+                    print(f"Saved {inserted_count} items to database at {db_path}")
+                    print(f"Total items in database: {len(all_data)}")
       
 asyncio.run(extract_linkedin_jobs())

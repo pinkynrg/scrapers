@@ -6,8 +6,17 @@ dist/
 wheels/
 *.egg-info
 
+# Misc
+.DS_Store
+
 # Virtual environments
 .venv
 
 # storage_states
 state/
+
+# data db folder
+data/
+
+# Env file
+.env

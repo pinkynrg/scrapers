@@ -1,0 +1,62 @@
+services:
+  api:
+    build: .
+    container_name: scrapers-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./state:/app/state
+    environment:
+      - DB_PATH=/app/data/scrapers.db
+    command: python api.py
+    restart: unless-stopped
+
+  linkedin-scraper:
+    build: .
+    container_name: linkedin-scraper
+    volumes:
+      - ./data:/app/data
+      - ./state:/app/state
+    environment:
+      - DB_PATH=/app/data/scrapers.db
+      - LINKEDIN_URL=https://www.linkedin.com/jobs/search/?currentJobId=4345767493&f_E=4&f_WT=2&keywords=python%20react%20docker&origin=JOB_SEARCH_PAGE_JOB_FILTER
+      - STATE_DIRECTORY=/app/state
+      - LOCAL=false
+      - SCRAPE_INTERVAL=3600  # Run every 60 minutes (in seconds)
+    command: >
+      sh -c "while true; do
+        echo 'Starting LinkedIn scraper...';
+        python crawlers/linkedin.py;
+        echo 'LinkedIn scraper completed. Sleeping for $$SCRAPE_INTERVAL seconds...';
+        sleep $SCRAPE_INTERVAL;
+      done"
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  blog-scraper:
+    build: .
+    container_name: blog-scraper
+    volumes:
+      - ./data:/app/data
+      - ./state:/app/state
+    environment:
+      - DB_PATH=/app/data/scrapers.db
+      - BLOG_URL=https://blog.francescomeli.com
+      - LOCAL=false
+      - SCRAPE_INTERVAL=1800  # Run every 30 minutes (in seconds)
+    command: >
+      sh -c "while true; do
+        echo 'Starting blog scraper...';
+        python crawlers/blog.py;
+        echo 'Blog scraper completed. Sleeping for $$SCRAPE_INTERVAL seconds...';
+        sleep $SCRAPE_INTERVAL;
+      done"
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  data:
+  state:

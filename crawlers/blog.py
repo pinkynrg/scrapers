@@ -1,19 +1,36 @@
+import os
 import json
 import asyncio
+from dotenv import load_dotenv
 from crawl4ai import BFSDeepCrawlStrategy, BrowserConfig, CrawlerRunConfig
 from crawl4ai import JsonCssExtractionStrategy
 from crawl4ai.deep_crawling.filters import FilterChain, DomainFilter, URLPatternFilter
+from helpers.db_helper import DatabaseHelper
 from helpers.crawler_wrapper import CrawlerWrapper
 
-local = True
-initial_url = "https://blog.francescomeli.com"
-session_id = "blog-posts-session"
-final_data = []
+# Load environment variables
+load_dotenv()
+
+local = os.getenv("LOCAL", "")
+db_path = os.getenv("DB_PATH", "")
+initial_url = os.getenv("BLOG_URL", "")
+
+print(f"LOCAL: {local}, DB_PATH: {db_path}, BLOG_URL: {initial_url}")
+
+if not local or not db_path or not initial_url:
+    raise ValueError("Please set required environment variables.")
 
 async def extract_blog_posts():
     schema = {
-        "name": "blog posts",
+        "name": "blog_posts",
         "baseSelector": ".post",
+        "baseFields": [
+            {
+                "name": "id",
+                "type": "attribute",
+                "attribute": "id",
+            }
+        ],
         "fields": [
             {
                 "name": "title",
@@ -47,7 +64,7 @@ async def extract_blog_posts():
     )
     
     browser_config = BrowserConfig(
-        headless=not local,
+        headless=(local != "true"),
         viewport_width=1920
     )
     
@@ -58,7 +75,7 @@ async def extract_blog_posts():
 
     crawler_wrapper = CrawlerWrapper(
         browser_config=browser_config,
-        local=local,
+        local=local == "true",
     )
     
     results = await crawler_wrapper.crawl(initial_url, crawler_config)
@@ -69,12 +86,16 @@ async def extract_blog_posts():
             return
         
         if result.extracted_content:
-            data = json.loads(result.extracted_content)
-            final_data.extend(data)
-            print(data)
+            with DatabaseHelper(db_path, schema) as db:
+                data = json.loads(result.extracted_content)
+                db.create_table_from_schema()
+                inserted_count = db.save_data(data)
+                print(f"Saved {inserted_count} items to database at {db_path}")
+                
+                # Print sample of saved data
+                all_data = db.get_all_data()
+                print(f"Total items in database: {len(all_data)}")
         else:
             print("No content extracted")
-
-        print(final_data)
 
 asyncio.run(extract_blog_posts())
