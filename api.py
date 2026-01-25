@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 import sqlite3
 import os
 from dotenv import load_dotenv
@@ -24,25 +24,26 @@ def get_db_connection():
 
 
 def get_table_data(table_name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Get all data from a table"""
+    """Get all data from a table with optional limit and offset for pagination"""
     conn = get_db_connection()
     cursor = conn.cursor()
-    
     try:
         # Check if table exists
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-        
         # Get data
         query = f"SELECT * FROM {table_name} ORDER BY created_at DESC"
-        if limit:
-            query += f" LIMIT {limit}"
-        
-        cursor.execute(query)
+        params = []
+        if hasattr(get_table_data, 'offset') and hasattr(get_table_data, 'limit'):
+            query += " LIMIT ? OFFSET ?"
+            params.extend([get_table_data.limit, get_table_data.offset])
+        elif hasattr(get_table_data, 'limit') and get_table_data.limit is not None:
+            query += " LIMIT ?"
+            params.append(get_table_data.limit)
+        cursor.execute(query, params)
         columns = [description[0] for description in cursor.description]
         rows = cursor.fetchall()
-        
         return [dict(zip(columns, row)) for row in rows]
     finally:
         conn.close()
@@ -88,12 +89,32 @@ def list_tables():
         conn.close()
 
 
+
 @app.get("/{table_name}")
-def get_table_items(table_name: str, limit: Optional[int] = None):
-    """Get all items from any table"""
-    data = get_table_data(table_name, limit)
+def get_table_items(
+    table_name: str,
+    page: int = Query(1, ge=1, description="Page number, starting from 1"),
+    pageSize: int = Query(20, ge=1, le=100, description="Number of items per page")
+):
+    """Get paginated items from any table"""
+    offset = (page - 1) * pageSize
+    # Attach pagination info to function for use in get_table_data
+    get_table_data.offset = offset
+    get_table_data.limit = pageSize
+    data = get_table_data(table_name, pageSize)
+    # Optionally, get total count for pagination info
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        total = cursor.fetchone()[0]
+    finally:
+        conn.close()
     return {
         "table": table_name,
+        "page": page,
+        "pageSize": pageSize,
+        "total": total,
         "count": len(data),
         "data": data
     }
