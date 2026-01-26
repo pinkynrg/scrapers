@@ -2,6 +2,7 @@ import json
 import asyncio
 import os
 import time
+import random
 from dotenv import load_dotenv
 from crawl4ai import BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai import JsonCssExtractionStrategy
@@ -94,7 +95,7 @@ async def extract_linkedin_jobs():
         local=local == "true",
     )
 
-    for index in range(1000):
+    for index in range(10):
         
         crawler_config = CrawlerRunConfig(
             js_only=True if index > 0 else False,
@@ -103,7 +104,7 @@ async def extract_linkedin_jobs():
             js_code=js_click_next_job if index > 0 else "",
             session_id="linkedin-jobs-session",
             wait_for="js:() => !document.querySelector('.artdeco-loader__bars')",
-            delay_before_return_html=1,
+            delay_before_return_html=random.uniform(1, 3),
         )
 
         results = await crawler_wrapper.crawl(initial_url, crawler_config)
@@ -115,11 +116,11 @@ async def extract_linkedin_jobs():
             
             if result.extracted_content:
                 data = json.loads(result.extracted_content)
-                with DatabaseHelper(db_path, schema) as db:
+                with DatabaseHelper(db_path, "linkedin", schema) as db:
                     db.create_table_from_schema()
                     inserted_count = db.save_data(data)
                     all_data = db.get_all_data()
-                    print(f"Saved {inserted_count} items to database at {db_path}")
+                    print(f"Saved {inserted_count} items to database at {db.db_path}")
                     print(f"Total items in database: {len(all_data)}")
 
 while True:

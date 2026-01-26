@@ -6,12 +6,14 @@ from typing import List, Dict, Any
 class DatabaseHelper:
     """Helper class for saving scraped data to SQLite database"""
     
-    def __init__(self, db_path: str, schema: Dict[str, Any]):
-        self.db_path = db_path
+    def __init__(self, db_directory: str, scraper_name: str, schema: Dict[str, Any]):
+        self.db_directory = db_directory
+        self.scraper_name = scraper_name
+        self.db_path = str(Path(db_directory) / f"{scraper_name}.db")
         self.table_name = schema.get("name", "scraped_data").replace(" ", "_").lower()
         self.fields = schema.get("fields", []) + schema.get("baseFields", [])
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
+        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
     
     def create_table_from_schema(self):

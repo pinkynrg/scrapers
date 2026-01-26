@@ -86,11 +86,11 @@ async def extract_blog_posts():
             return
         
         if result.extracted_content:
-            with DatabaseHelper(db_path, schema) as db:
+            with DatabaseHelper(db_path, "blog", schema) as db:
                 data = json.loads(result.extracted_content)
                 db.create_table_from_schema()
                 inserted_count = db.save_data(data)
-                print(f"Saved {inserted_count} items to database at {db_path}")
+                print(f"Saved {inserted_count} items to database at {db.db_path}")
                 
                 # Print sample of saved data
                 all_data = db.get_all_data()
