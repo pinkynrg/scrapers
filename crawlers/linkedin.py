@@ -95,7 +95,7 @@ async def extract_linkedin_jobs():
         local=local == "true",
     )
 
-    for index in range(10):
+    for index in range(1000):
         
         crawler_config = CrawlerRunConfig(
             js_only=True if index > 0 else False,
