@@ -39,3 +39,14 @@ services:
       - SCRAPE_INTERVAL=3600  # 1 hour in seconds
     command: python crawlers/blog.py
     restart: always
+
+  cucchiaio-scraper:
+    image: pinkynrg/scrapers:latest
+    container_name: cucchiaio-scraper
+    volumes:
+      - /mnt/data/scrapers/data:/app/data
+    environment:
+      - DB_PATH=/app/data/scrapers.db
+      - SCRAPE_INTERVAL=3600  # 1 hour in seconds
+    command: python crawlers/cucchiaio.py
+    restart: always
