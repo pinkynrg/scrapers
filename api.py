@@ -34,8 +34,21 @@ def get_db_connection(scraper_name: str):
     return sqlite3.connect(db_files[scraper_name])
 
 
-def get_table_data(scraper_name: str, table_name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Get all data from a table with optional limit and offset for pagination"""
+def get_table_columns(scraper_name: str, table_name: str) -> List[str]:
+    """Get all column names for a table"""
+    conn = get_db_connection(scraper_name)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in cursor.fetchall()]
+        return columns
+    finally:
+        conn.close()
+
+
+def get_table_data(scraper_name: str, table_name: str, limit: Optional[int] = None, offset: int = 0, 
+                   search: Optional[str] = None, search_columns: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """Get all data from a table with optional limit, offset, and search functionality"""
     conn = get_db_connection(scraper_name)
     cursor = conn.cursor()
     try:
@@ -43,19 +56,44 @@ def get_table_data(scraper_name: str, table_name: str, limit: Optional[int] = No
         cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
-        # Get data
-        query = f"SELECT * FROM {table_name} ORDER BY created_at DESC"
+        
+        # Get all columns for validation
+        all_columns = get_table_columns(scraper_name, table_name)
+        
+        # Build query
+        query = f"SELECT * FROM {table_name}"
         params = []
-        # If limit is -1, return all results without pagination
-        if hasattr(get_table_data, 'limit') and get_table_data.limit == -1:
+        
+        # Add search conditions if provided
+        if search:
+            if search_columns:
+                # Validate that requested columns exist
+                invalid_columns = [col for col in search_columns if col not in all_columns]
+                if invalid_columns:
+                    raise HTTPException(status_code=400, detail=f"Invalid columns: {', '.join(invalid_columns)}")
+                columns_to_search = search_columns
+            else:
+                # Search in all columns
+                columns_to_search = all_columns
+            
+            # Build WHERE clause with OR conditions for each column
+            search_conditions = [f"{col} LIKE ?" for col in columns_to_search]
+            query += " WHERE " + " OR ".join(search_conditions)
+            search_term = f"%{search}%"
+            params.extend([search_term] * len(columns_to_search))
+        
+        # Add ORDER BY if created_at column exists
+        if "created_at" in all_columns:
+            query += " ORDER BY created_at DESC"
+        
+        # Add pagination
+        if limit == -1:
             # Don't add LIMIT clause
             pass
-        elif hasattr(get_table_data, 'offset') and hasattr(get_table_data, 'limit'):
+        elif limit is not None:
             query += " LIMIT ? OFFSET ?"
-            params.extend([get_table_data.limit, get_table_data.offset])
-        elif hasattr(get_table_data, 'limit') and get_table_data.limit is not None:
-            query += " LIMIT ?"
-            params.append(get_table_data.limit)
+            params.extend([limit, offset])
+        
         cursor.execute(query, params)
         columns = [description[0] for description in cursor.description]
         rows = cursor.fetchall()
@@ -130,32 +168,45 @@ def get_table_items(
     scraper_name: str,
     table_name: str,
     page: int = Query(1, ge=1, description="Page number, starting from 1"),
-    page_size: int = Query(20, ge=-1, description="Number of items per page. Use -1 to get all items.")
+    page_size: int = Query(20, ge=-1, description="Number of items per page. Use -1 to get all items."),
+    search: Optional[str] = Query(None, description="Search term to filter results"),
+    search_columns: Optional[str] = Query(None, description="Comma-separated column names to search in (searches all columns if not provided)")
 ):
-    """Get paginated items from any table in a specific scraper. Use page_size=-1 to get all items."""
+    """Get paginated items from any table in a specific scraper. Use page_size=-1 to get all items. Optionally filter with search."""
+    # Parse search_columns if provided
+    search_columns_list = [col.strip() for col in search_columns.split(",")] if search_columns else None
+    
     # If page_size is -1, get all results
     if page_size == -1:
-        get_table_data.offset = 0
-        get_table_data.limit = -1
-        data = get_table_data(scraper_name, table_name, page_size)
+        data = get_table_data(scraper_name, table_name, limit=-1, offset=0, search=search, search_columns=search_columns_list)
     else:
         # Validate page_size is within limits when not -1
         if page_size > 100:
             raise HTTPException(status_code=400, detail="page_size cannot exceed 100 (use -1 for all items)")
         offset = (page - 1) * page_size
-        # Attach pagination info to function for use in get_table_data
-        get_table_data.offset = offset
-        get_table_data.limit = page_size
-        data = get_table_data(scraper_name, table_name, page_size)
+        data = get_table_data(scraper_name, table_name, limit=page_size, offset=offset, search=search, search_columns=search_columns_list)
     
-    # Optionally, get total count for pagination info
+    # Get total count for pagination info (with search filter if applicable)
     conn = get_db_connection(scraper_name)
     cursor = conn.cursor()
     try:
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+        count_query = f"SELECT COUNT(*) FROM {table_name}"
+        count_params = []
+        
+        # Apply same search filter to count query
+        if search:
+            all_columns = get_table_columns(scraper_name, table_name)
+            columns_to_search = search_columns_list if search_columns_list else all_columns
+            search_conditions = [f"{col} LIKE ?" for col in columns_to_search]
+            count_query += " WHERE " + " OR ".join(search_conditions)
+            search_term = f"%{search}%"
+            count_params.extend([search_term] * len(columns_to_search))
+        
+        cursor.execute(count_query, count_params)
         total = cursor.fetchone()[0]
     finally:
         conn.close()
+    
     return {
         "scraper": scraper_name,
         "table": table_name,
@@ -163,6 +214,8 @@ def get_table_items(
         "page_size": page_size,
         "total": total,
         "count": len(data),
+        "search": search,
+        "search_columns": search_columns_list,
         "data": data
     }
 
