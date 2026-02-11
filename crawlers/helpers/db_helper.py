@@ -12,6 +12,7 @@ class DatabaseHelper:
         self.db_path = str(Path(db_directory) / f"{scraper_name}.db")
         self.table_name = schema.get("name", "scraped_data").replace(" ", "_").lower()
         self.fields = schema.get("fields", []) + schema.get("baseFields", [])
+        self.primary_key = schema.get("primary_key", "id")  # Default to 'id', but allow override
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.cursor = self.conn.cursor()
@@ -24,8 +25,8 @@ class DatabaseHelper:
         columns = []
         for field in self.fields:
             field_name = field["name"]
-            # Use id field as primary key if it exists
-            if field_name == "id":
+            # Use specified primary key field
+            if field_name == self.primary_key:
                 columns.append(f"{field_name} TEXT PRIMARY KEY")
             else:
                 columns.append(f"{field_name} TEXT")
@@ -68,8 +69,8 @@ class DatabaseHelper:
             # Extract values in the correct order
             values = [item.get(field_name) for field_name in field_names]
             
-            # Skip if id is None or empty
-            if "id" in field_names and not values[field_names.index("id")]:
+            # Skip if primary key is None or empty
+            if self.primary_key in field_names and not values[field_names.index(self.primary_key)]:
                 continue
             
             try:
@@ -88,6 +89,13 @@ class DatabaseHelper:
         columns = [description[0] for description in self.cursor.description]
         rows = self.cursor.fetchall()
         return [dict(zip(columns, row)) for row in rows]
+    
+    def delete_by_field(self, field_name: str, field_value: str) -> int:
+        """Delete records where field matches value"""
+        delete_sql = f"DELETE FROM {self.table_name} WHERE {field_name} = ?"
+        self.cursor.execute(delete_sql, (field_value,))
+        self.conn.commit()
+        return self.cursor.rowcount
     
     def close(self):
         """Close the database connection"""

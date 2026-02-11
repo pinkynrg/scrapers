@@ -61,7 +61,6 @@ def get_table_data(scraper_name: str, table_name: str, limit: Optional[int] = No
         all_columns = get_table_columns(scraper_name, table_name)
         
         # Build query
-        query = f"SELECT * FROM {table_name}"
         params = []
         
         # Add search conditions if provided
@@ -72,19 +71,61 @@ def get_table_data(scraper_name: str, table_name: str, limit: Optional[int] = No
                 if invalid_columns:
                     raise HTTPException(status_code=400, detail=f"Invalid columns: {', '.join(invalid_columns)}")
                 columns_to_search = search_columns
+                # If user specified columns, they're all high priority
+                user_specified = True
             else:
                 # Search in all columns
                 columns_to_search = all_columns
+                user_specified = False
+            
+            # Build relevance score expression based on column priority
+            relevance_cases = []
+            num_columns = len(columns_to_search)
+            for index, col in enumerate(columns_to_search):
+                if user_specified:
+                    # Earlier columns in the list get higher weight
+                    # First column: 10 * num_columns, second: 10 * (num_columns - 1), etc.
+                    base_weight = 10 * (num_columns - index)
+                else:
+                    # All columns get equal priority when searching all
+                    base_weight = 1
+                
+                # Give extra weight if search term is at the start of the field (2x bonus)
+                # Regular match gets base_weight, start match gets base_weight * 2
+                relevance_cases.append(
+                    f"CASE WHEN {col} LIKE ? THEN {base_weight * 2} "
+                    f"WHEN {col} LIKE ? THEN {base_weight} ELSE 0 END"
+                )
+            
+            relevance_score = " + ".join(relevance_cases)
+            
+            # SELECT with relevance score
+            query = f"SELECT *, ({relevance_score}) as relevance_score FROM {table_name}"
             
             # Build WHERE clause with OR conditions for each column
             search_conditions = [f"{col} LIKE ?" for col in columns_to_search]
             query += " WHERE " + " OR ".join(search_conditions)
             search_term = f"%{search}%"
+            search_term_start = f"{search}%"
+            # Parameters for relevance score calculation (2 params per column: start match, contains match)
+            for _ in columns_to_search:
+                params.append(search_term_start)  # For "starts with" check
+                params.append(search_term)        # For "contains" check
+            # Parameters for WHERE clause
             params.extend([search_term] * len(columns_to_search))
-        
-        # Add ORDER BY if created_at column exists
-        if "created_at" in all_columns:
-            query += " ORDER BY created_at DESC"
+            
+            # Order by relevance first, then by created_at if available
+            if "created_at" in all_columns:
+                query += " ORDER BY relevance_score DESC, created_at DESC"
+            else:
+                query += " ORDER BY relevance_score DESC"
+        else:
+            # No search, just select all
+            query = f"SELECT * FROM {table_name}"
+            
+            # Add ORDER BY if created_at column exists
+            if "created_at" in all_columns:
+                query += " ORDER BY created_at DESC"
         
         # Add pagination
         if limit == -1:
@@ -97,6 +138,12 @@ def get_table_data(scraper_name: str, table_name: str, limit: Optional[int] = No
         cursor.execute(query, params)
         columns = [description[0] for description in cursor.description]
         rows = cursor.fetchall()
+        
+        # Remove relevance_score from results if it was added
+        if search and 'relevance_score' in columns:
+            columns.remove('relevance_score')
+            return [dict(zip(columns, row[:-1])) for row in rows]
+        
         return [dict(zip(columns, row)) for row in rows]
     finally:
         conn.close()
