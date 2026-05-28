@@ -2441,6 +2441,7 @@ name = "scrapers"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "crawl4ai" },
     { name = "fastapi" },
     { name = "python-dotenv" },
@@ -2449,6 +2450,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.11.0" },
     { name = "crawl4ai", specifier = ">=0.8.0" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
